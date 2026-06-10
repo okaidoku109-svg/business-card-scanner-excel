@@ -34,6 +34,7 @@ import {
   Image
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
+import { QRCodeSVG } from "qrcode.react";
 import * as XLSX from "xlsx";
 import { BusinessCard } from "./types";
 import CameraCapture from "./components/CameraCapture";
@@ -165,6 +166,7 @@ export default function App() {
   const [copiedField, setCopiedField] = useState<string | null>(null);
   const [serverOnline, setServerOnline] = useState<boolean | null>(null);
   const [mobileAccessUrl, setMobileAccessUrl] = useState<string | null>(null);
+  const [mobileUrlCopied, setMobileUrlCopied] = useState(false);
   const mobileCameraInputRef = useRef<HTMLInputElement>(null);
   const isMobile = isMobileDevice();
 
@@ -716,6 +718,48 @@ export default function App() {
       )}
 
       <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8 grid grid-cols-1 lg:grid-cols-12 gap-6 pb-24">
+
+        {/* スマホアクセス用 QRコード（PC表示時） */}
+        {mobileAccessUrl && !isMobile && (
+          <section className="lg:col-span-12">
+            <div className="bg-zinc-900/90 backdrop-blur-sm rounded-2xl border border-zinc-800 shadow-lg shadow-black/30 p-4 sm:p-5 flex flex-col sm:flex-row items-center gap-4 sm:gap-6">
+              <div className="shrink-0 p-3 bg-white rounded-xl shadow-inner ring-1 ring-zinc-700">
+                <QRCodeSVG
+                  value={mobileAccessUrl}
+                  size={112}
+                  level="M"
+                  includeMargin={false}
+                />
+              </div>
+              <div className="flex-1 text-center sm:text-left min-w-0">
+                <div className="flex items-center justify-center sm:justify-start gap-2 mb-1.5">
+                  <Smartphone size={16} className="text-emerald-400 shrink-0" />
+                  <h2 className="text-sm font-bold text-zinc-100">スマホからアクセス</h2>
+                </div>
+                <p className="text-xs text-zinc-500 mb-3 leading-relaxed">
+                  同じ Wi-Fi に接続したスマホで、下の QR コードを読み取るか URL を開いてください。
+                </p>
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+                  <code className="flex-1 text-xs text-emerald-400 bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 truncate font-mono">
+                    {mobileAccessUrl}
+                  </code>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      navigator.clipboard.writeText(mobileAccessUrl);
+                      setMobileUrlCopied(true);
+                      setTimeout(() => setMobileUrlCopied(false), 1500);
+                    }}
+                    className="shrink-0 px-3 py-2 text-xs font-semibold text-zinc-300 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded-lg transition-colors flex items-center justify-center gap-1.5"
+                  >
+                    <Clipboard size={13} />
+                    {mobileUrlCopied ? "コピー済" : "URLをコピー"}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </section>
+        )}
         
         {/* Left column: Card OCR capture zone (columns 1 to 5) */}
         <section className="lg:col-span-5 flex flex-col gap-5">
