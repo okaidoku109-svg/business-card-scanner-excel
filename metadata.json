@@ -1,0 +1,10 @@
+{
+  "name": "名刺スキャナー ＆ エクセル出力",
+  "description": "名刺の写真をスマートに撮影し、名前、会社、役職、住所、連絡先などの情報を自動でテキスト化して一覧リストに登録します。リストはワンクリックでExcel形式（.xlsx）でエクスポートできます。",
+  "requestFramePermissions": [
+    "camera"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
