@@ -39,6 +39,10 @@ import { BusinessCard } from "./types";
 import CameraCapture from "./components/CameraCapture";
 import CardItem from "./components/CardItem";
 
+function isMobileDevice(): boolean {
+  return /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+}
+
 // Demo data if user wants to play instantly
 const DEMO_CARDS: BusinessCard[] = [
   {
@@ -159,6 +163,10 @@ export default function App() {
   
   // Clipboard copy state mapping
   const [copiedField, setCopiedField] = useState<string | null>(null);
+  const [serverOnline, setServerOnline] = useState<boolean | null>(null);
+  const [mobileAccessUrl, setMobileAccessUrl] = useState<string | null>(null);
+  const mobileCameraInputRef = useRef<HTMLInputElement>(null);
+  const isMobile = isMobileDevice();
 
   // Update specific fields from spreadsheet inline editing
   const handleUpdateCardField = (cardId: string, field: keyof BusinessCard, newValue: string) => {
@@ -185,6 +193,28 @@ export default function App() {
     } catch (e) {
       console.error("Localstorage load error:", e);
     }
+  }, []);
+
+  // サーバー/API 接続確認（スマホの localhost 誤接続を検知）
+  useEffect(() => {
+    async function checkServer() {
+      try {
+        const healthRes = await fetch("/api/health");
+        setServerOnline(healthRes.ok);
+        if (healthRes.ok) {
+          const infoRes = await fetch("/api/info");
+          if (infoRes.ok) {
+            const info = await infoRes.json();
+            if (info.lanUrls?.length > 0) {
+              setMobileAccessUrl(info.lanUrls[0]);
+            }
+          }
+        }
+      } catch {
+        setServerOnline(false);
+      }
+    }
+    checkServer();
   }, []);
 
   // Save to localStorage when list changes
@@ -239,7 +269,12 @@ export default function App() {
           const errorData = await response.json();
           message = errorData.error || message;
         } catch {
-          message = `サーバーエラー (${response.status})。npm run dev で起動しているか確認してください。`;
+          if (response.status === 404) {
+            message =
+              "APIが見つかりません（404）。スマホでは PC と同じ Wi-Fi 上で、PC の IP アドレス（例: http://192.168.0.10:3000）で開いてください。localhost は使えません。";
+          } else {
+            message = `サーバーエラー (${response.status})。npm run dev で起動しているか確認してください。`;
+          }
         }
         throw new Error(message);
       }
@@ -659,6 +694,27 @@ export default function App() {
         </div>
       </header>
 
+      {(serverOnline === false || (isMobile && window.location.hostname === "localhost")) && (
+        <div className="bg-amber-950/80 border-b border-amber-800/50 px-4 py-3">
+          <p className="max-w-7xl mx-auto text-xs text-amber-200 leading-relaxed flex items-start gap-2">
+            <AlertCircle size={16} className="shrink-0 mt-0.5 text-amber-400" />
+            <span>
+              <strong className="text-amber-100">スマホからアクセスする場合:</strong>{" "}
+              PC で <code className="text-amber-300">npm run dev</code> を実行し、
+              同じ Wi-Fi 上で{" "}
+              {mobileAccessUrl ? (
+                <a href={mobileAccessUrl} className="text-emerald-400 underline font-semibold">
+                  {mobileAccessUrl}
+                </a>
+              ) : (
+                <span>PC の IP アドレス（例: http://192.168.0.10:3000）</span>
+              )}{" "}
+              を開いてください。スマホのブラウザで <code className="text-amber-300">localhost</code> は使えません。
+            </span>
+          </p>
+        </div>
+      )}
+
       <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8 grid grid-cols-1 lg:grid-cols-12 gap-6 pb-24">
         
         {/* Left column: Card OCR capture zone (columns 1 to 5) */}
@@ -741,22 +797,57 @@ export default function App() {
                     <Camera size={26} />
                   </div>
                   <h4 className="font-bold text-zinc-100 text-sm mb-1">
-                    カメラを起動して撮影
+                    {isMobile ? "スマホのカメラで撮影" : "カメラを起動して撮影"}
                   </h4>
                   <p className="text-xs text-zinc-500 mb-4 max-w-[280px] mx-auto leading-relaxed">
-                    PCカメラ、またはスマートフォンの背面カメラで名刺をピントを合わせてキャプチャします。
+                    {isMobile
+                      ? "スマホのカメラアプリで名刺を撮影し、AIが自動読み取りします。"
+                      : "PCカメラ、またはスマートフォンの背面カメラで名刺をピントを合わせてキャプチャします。"}
                   </p>
-                  <button
-                    onClick={() => {
-                      setShowCamera(true);
-                      setScanError(null);
-                    }}
-                    id="open-camera-sys"
-                    className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg font-semibold text-xs tracking-wide shadow-lg shadow-emerald-900/40 transition-all active:scale-95 flex items-center gap-2 mx-auto ring-1 ring-emerald-400/30"
-                  >
-                    <Camera size={14} />
-                    カメラスキャナーを起動する
-                  </button>
+
+                  {isMobile ? (
+                    <>
+                      <input
+                        ref={mobileCameraInputRef}
+                        type="file"
+                        accept="image/*"
+                        capture="environment"
+                        className="hidden"
+                        onChange={handleFileInputChange}
+                      />
+                      <button
+                        onClick={() => {
+                          setScanError(null);
+                          mobileCameraInputRef.current?.click();
+                        }}
+                        className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg font-semibold text-xs tracking-wide shadow-lg shadow-emerald-900/40 transition-all active:scale-95 flex items-center gap-2 mx-auto ring-1 ring-emerald-400/30"
+                      >
+                        <Smartphone size={14} />
+                        スマホカメラで撮影する
+                      </button>
+                      <button
+                        onClick={() => {
+                          setShowCamera(true);
+                          setScanError(null);
+                        }}
+                        className="mt-3 px-4 py-2 text-xs text-zinc-500 hover:text-zinc-300 underline"
+                      >
+                        ブラウザ内カメラを使う（環境によっては不可）
+                      </button>
+                    </>
+                  ) : (
+                    <button
+                      onClick={() => {
+                        setShowCamera(true);
+                        setScanError(null);
+                      }}
+                      id="open-camera-sys"
+                      className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg font-semibold text-xs tracking-wide shadow-lg shadow-emerald-900/40 transition-all active:scale-95 flex items-center gap-2 mx-auto ring-1 ring-emerald-400/30"
+                    >
+                      <Camera size={14} />
+                      カメラスキャナーを起動する
+                    </button>
+                  )}
                 </div>
               )}
 

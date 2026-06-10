@@ -91,7 +91,12 @@ export default function CameraCapture({ onCapture, onClose }: CameraCaptureProps
           }
           setError("");
         } catch (fallbackErr) {
-          setError("選択されたカメラの起動に失敗しました。別のカメラを試すか、ファイルのアップロードをご利用ください。");
+          const isSecureContext = window.isSecureContext;
+          setError(
+            isSecureContext
+              ? "選択されたカメラの起動に失敗しました。下の「スマホカメラで撮影」ボタン、または画像アップをご利用ください。"
+              : "HTTP接続ではブラウザ内カメラが使えない場合があります。下の「スマホカメラで撮影」ボタン、または画像アップをご利用ください。"
+          );
         }
       }
     }

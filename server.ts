@@ -1,5 +1,6 @@
 import dotenv from "dotenv";
 import express from "express";
+import os from "os";
 import path from "path";
 import { fileURLToPath } from "url";
 import { GoogleGenAI, Type } from "@google/genai";
@@ -10,6 +11,19 @@ dotenv.config();
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+function getLanUrls(port: number): string[] {
+  const urls: string[] = [];
+  for (const interfaces of Object.values(os.networkInterfaces())) {
+    if (!interfaces) continue;
+    for (const iface of interfaces) {
+      if (iface.family === "IPv4" && !iface.internal) {
+        urls.push(`http://${iface.address}:${port}`);
+      }
+    }
+  }
+  return urls;
+}
 
 async function startServer() {
   const app = express();
@@ -76,6 +90,13 @@ async function startServer() {
       status: "ok",
       geminiConfigured: configured && apiKeyValid,
       time: new Date().toISOString(),
+    });
+  });
+
+  app.get("/api/info", (req, res) => {
+    res.json({
+      port: PORT,
+      lanUrls: getLanUrls(PORT),
     });
   });
 
@@ -161,7 +182,12 @@ async function startServer() {
     // Import Vite dynamically to prevent loading in production server bundles
     const { createServer: createViteServer } = await import("vite");
     const vite = await createViteServer({
-      server: { middlewareMode: true },
+      server: {
+        middlewareMode: true,
+        host: "0.0.0.0",
+        // スマホからLAN経由で開いたときのHMRエラーを防ぐ
+        hmr: false,
+      },
       appType: "spa",
     });
     app.use(vite.middlewares);
@@ -175,7 +201,12 @@ async function startServer() {
   }
 
   app.listen(PORT, "0.0.0.0", () => {
-    console.log(`[Server] Fullstack server running on http://localhost:${PORT}`);
+    const lanUrls = getLanUrls(PORT);
+    console.log(`[Server] PC:       http://localhost:${PORT}`);
+    if (lanUrls.length > 0) {
+      console.log(`[Server] スマホ用: ${lanUrls.join(", ")}`);
+      console.log("[Server] ※スマホは上記URLで開いてください（localhostは使えません）");
+    }
     if (!isGeminiConfigured()) {
       console.warn(
         "[Server] GEMINI_API_KEY が未設定です。.env.local に API キーを設定してください。"
