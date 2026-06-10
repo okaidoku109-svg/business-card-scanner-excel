@@ -234,8 +234,14 @@ export default function App() {
       });
 
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || "自動解析サーバーでエラーが発生しました。");
+        let message = "自動解析サーバーでエラーが発生しました。";
+        try {
+          const errorData = await response.json();
+          message = errorData.error || message;
+        } catch {
+          message = `サーバーエラー (${response.status})。npm run dev で起動しているか確認してください。`;
+        }
+        throw new Error(message);
       }
 
       setScanStatus("名刺データの構造化および自動整形中...");
@@ -257,9 +263,18 @@ export default function App() {
       });
 
       setScanStatus("");
+      setIsScanning(false);
     } catch (error: any) {
       console.error("Analysis failed:", error);
-      setScanError(error.message || "名刺の解析に失敗しました。画像のピントがあっているか、光が反射していないかお確かめください。");
+      const isNetworkError =
+        error instanceof TypeError ||
+        error?.message?.includes("Failed to fetch") ||
+        error?.message?.includes("NetworkError");
+      setScanError(
+        isNetworkError
+          ? "サーバーに接続できません。ターミナルで npm install の後、npm run dev を実行し、http://localhost:3000 を開いてください。"
+          : error.message || "名刺の解析に失敗しました。画像のピントがあっているか、光が反射していないかお確かめください。"
+      );
       setIsScanning(false);
     }
   };

@@ -120,10 +120,15 @@ export default function CameraCapture({ onCapture, onClose }: CameraCaptureProps
 
     const video = videoRef.current;
     const canvas = canvasRef.current;
+
+    if (!video.videoWidth || !video.videoHeight) {
+      setError("カメラの準備ができていません。数秒待ってから再度撮影してください。");
+      return;
+    }
     
     // Set canvas dimensions to match actual camera resolution
-    const width = video.videoWidth || 1280;
-    const height = video.videoHeight || 720;
+    const width = video.videoWidth;
+    const height = video.videoHeight;
     canvas.width = width;
     canvas.height = height;
 

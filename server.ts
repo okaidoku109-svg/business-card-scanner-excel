@@ -1,7 +1,12 @@
+import dotenv from "dotenv";
 import express from "express";
 import path from "path";
 import { fileURLToPath } from "url";
 import { GoogleGenAI, Type } from "@google/genai";
+
+// .env.local を優先して読み込み（README 記載のローカル設定）
+dotenv.config({ path: ".env.local" });
+dotenv.config();
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -14,14 +19,39 @@ async function startServer() {
   app.use(express.json({ limit: "20mb" }));
   app.use(express.urlencoded({ limit: "20mb", extended: true }));
 
-  // Initialize Gemini client (Lazy initialization check during calls)
-  const getGeminiClient = () => {
-    const apiKey = process.env.GEMINI_API_KEY;
-    if (!apiKey || apiKey === "MY_GEMINI_API_KEY" || apiKey.trim() === "") {
-      throw new Error("GEMINI_API_KEY environment variable is not configured. Please set it in Settings > Secrets.");
+  const isGeminiConfigured = () => {
+    const apiKey = process.env.GEMINI_API_KEY?.trim() ?? "";
+    const placeholders = new Set([
+      "MY_GEMINI_API_KEY",
+      "ここにAPIキーを貼り付け",
+      "your_api_key_here",
+    ]);
+    return apiKey.length > 0 && !placeholders.has(apiKey);
+  };
+
+  const validateApiKey = (apiKey: string) => {
+    if (!/^[\x21-\x7E]+$/.test(apiKey)) {
+      throw new Error(
+        "GEMINI_API_KEY に日本語や空白・改行が含まれています。Google AI Studio から API キー（AIza で始まる英数字）だけをコピーし、.env.local に GEMINI_API_KEY=キー の形式で1行で保存してください。"
+      );
     }
+    if (!apiKey.startsWith("AIza")) {
+      throw new Error(
+        "GEMINI_API_KEY の形式が正しくありません。https://aistudio.google.com/apikey から取得した AIza で始まるキーを設定してください。"
+      );
+    }
+  };
+
+  const getGeminiClient = () => {
+    if (!isGeminiConfigured()) {
+      throw new Error(
+        "GEMINI_API_KEY が未設定です。.env.local に Google AI Studio で取得した API キーを設定し、サーバーを再起動してください。"
+      );
+    }
+    const apiKey = process.env.GEMINI_API_KEY!.trim();
+    validateApiKey(apiKey);
     return new GoogleGenAI({
-      apiKey: apiKey,
+      apiKey,
       httpOptions: {
         headers: {
           'User-Agent': 'aistudio-build',
@@ -32,7 +62,21 @@ async function startServer() {
 
   // Health check
   app.get("/api/health", (req, res) => {
-    res.json({ status: "ok", time: new Date().toISOString() });
+    const configured = isGeminiConfigured();
+    let apiKeyValid = false;
+    if (configured) {
+      try {
+        validateApiKey(process.env.GEMINI_API_KEY!.trim());
+        apiKeyValid = true;
+      } catch {
+        apiKeyValid = false;
+      }
+    }
+    res.json({
+      status: "ok",
+      geminiConfigured: configured && apiKeyValid,
+      time: new Date().toISOString(),
+    });
   });
 
   // Business card photo analyzer endpoint
@@ -131,7 +175,12 @@ async function startServer() {
   }
 
   app.listen(PORT, "0.0.0.0", () => {
-    console.log(`[Server] Fullstack server running on http://0.0.0.0:${PORT}`);
+    console.log(`[Server] Fullstack server running on http://localhost:${PORT}`);
+    if (!isGeminiConfigured()) {
+      console.warn(
+        "[Server] GEMINI_API_KEY が未設定です。.env.local に API キーを設定してください。"
+      );
+    }
   });
 }
 
